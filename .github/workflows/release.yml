@@ -68,3 +68,20 @@ jobs:
             -f generate_release_notes=true \
             -F draft=false \
             -F prerelease=false
+
+      - name: Marketplace publish reminder
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_url="https://github.com/${REPO}/releases/tag/${RELEASE_TAG}"
+          {
+            echo "## Marketplace Publication"
+            echo
+            echo "Release created: ${release_url}"
+            echo
+            echo "GitHub Actions Marketplace publication still requires manual UI confirmation."
+            echo "Open the release, click edit, enable 'Publish this Action to the GitHub Marketplace',"
+            echo "choose category, then save."
+          } >> "$GITHUB_STEP_SUMMARY"

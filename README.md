@@ -125,6 +125,7 @@ sheets_service_account = "/path/to/service-account.json"
 - Consumers should pin this action to a full commit SHA for maximum integrity.
 - If using tags, prefer stable major tags (`@v1`) and keep them mapped to immutable release commits.
 - This repository includes automated release workflow `.github/workflows/release.yml` triggered by pushing tags like `v1.2.3`.
+- Marketplace publication itself is still a manual GitHub UI step; the release workflow adds a summary with a direct release link and checklist.
 
 ## Development
 

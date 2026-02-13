@@ -14,3 +14,4 @@
 
 - [x] Add automated release workflow for version tags and major tag alias updates.
 - [ ] Add optional pip cache support for faster installs in repeated CI runs.
+- [ ] Add a dedicated preflight workflow that validates Marketplace checklist fields before tagging.

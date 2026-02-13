@@ -47,3 +47,4 @@ The wrapper fails if inputs are invalid or `worai` is unavailable in `PATH`.
   - validates tag format (`vMAJOR.MINOR.PATCH`)
   - force-updates major alias tag (`v<major>`)
   - publishes GitHub Release with generated notes (skips if already present)
+  - writes a post-release summary for required manual Marketplace publication fields
