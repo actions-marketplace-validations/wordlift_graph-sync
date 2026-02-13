@@ -1,4 +1,4 @@
-# worai GitHub Action
+# graph-sync GitHub Action
 
 GitHub Action to install `worai` and run:
 

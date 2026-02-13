@@ -1,4 +1,4 @@
-name: 'Run worai graph sync'
+name: 'graph-sync'
 description: 'Install worai and run graph sync for a selected profile'
 author: 'WordLift'
 branding:
