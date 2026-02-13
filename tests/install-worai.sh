@@ -66,7 +66,7 @@ assert_eq "-m pip install worai==1.14.0" "$second_call" "second command installs
 # Case 4: missing python interpreters
 EMPTY_BIN="$TMP_DIR/empty-bin"
 mkdir -p "$EMPTY_BIN"
-code=$(run_case no_python env PATH="$EMPTY_BIN:/usr/bin:/bin" INPUT_WORAI_VERSION="1.14.0" "$SCRIPT")
+code=$(run_case no_python /usr/bin/env PATH="$EMPTY_BIN" INPUT_WORAI_VERSION="1.14.0" /bin/bash "$SCRIPT")
 assert_eq "1" "$code" "missing python should fail"
 
 if [[ "$fail_count" -ne 0 ]]; then
