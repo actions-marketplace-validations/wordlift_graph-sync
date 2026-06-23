@@ -13,3 +13,6 @@ jobs:
         run: |
           ./tests/run-worai.sh
           ./tests/install-worai.sh
+          ./tests/install-playwright.sh
+          ./tests/resolve-cache-key.sh
+          ./tests/run-graph-kpis.sh

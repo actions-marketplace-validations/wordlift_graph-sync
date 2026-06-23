@@ -8,6 +8,7 @@ GitHub Action to install `worai`, install Python Playwright + Chromium, and run:
 ## Requirements
 
 - Python (`python3` or `python`) must be available on the runner.
+- Optional graph KPI upload needs Python with TOML parsing support (`tomllib` on Python 3.11+, or `tomli`).
 - `profile` is required and must exist in the selected `worai` config.
 
 ## Inputs
@@ -26,6 +27,13 @@ GitHub Action to install `worai`, install Python Playwright + Chromium, and run:
 | `cache_enabled`      | No       | `true`     | Enables dependency cache for pip and Playwright browser binaries when truthy (`true/1/yes`).                       |
 | `output_dir`         | No       | `''`       | Directory for output artifacts (`graph_sync_report.md`, `graph_sync_failures.csv`). When set, the report is written and published to the job summary. Requires `worai>=6.19.0`; silently skipped on older versions. |
 | `cache_key_suffix`   | No       | `''`       | Optional cache key suffix. When empty, action derives `<worai_version>-<playwright_version>-<playwright_browser>`. |
+| `graph_kpis_enabled` | No       | `false`    | When truthy, export and audit the graph after a successful sync, then upload a graph KPI snapshot. |
+| `graph_kpis_snapshot_date` | No | `''`       | Snapshot date for the KPI upload as `YYYY-MM-DD`. Defaults to the current UTC date. |
+| `graph_kpis_service_manager_url` | No | `https://api.wordlift.io` | HTTPS origin URL for service-manager graph KPI APIs. |
+| `graph_kpis_allowed_hosts` | No | `api.wordlift.io` | Comma-separated HTTPS host allowlist for graph KPI service-manager and export endpoints. |
+| `graph_kpis_export_endpoint` | No | `''`       | Optional WordLift graph export endpoint override. Defaults to `worai graph export` behavior. |
+| `graph_kpis_fail_on_error` | No | `false`    | When truthy, fail the action if KPI export, audit, or upload fails. Default is warning-only. |
+| `graph_kpis_retry_attempts` | No | `3`        | Maximum upload attempts for transient graph KPI API failures. |
 
 ## Behavior
 
@@ -35,11 +43,15 @@ GitHub Action to install `worai`, install Python Playwright + Chromium, and run:
   - `worai --profile <name> graph sync run [--debug]`
 - The action exports `WORAI_LOG_LEVEL=<value>` for the `worai` process. Default is `warning`.
 - The action always passes the root `--profile` option (the recommended form in current `worai` docs for `graph sync run`).
+- When `graph_kpis_enabled` is true and sync succeeds, the action runs `worai graph export`, then `worai graph audit --format json`, then uploads the sanitized KPI snapshot with `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
+- The KPI upload uses the selected `worai` profile `api_key` as `Authorization: Key ...`; no separate upload token is required. The action resolves the account id with `GET /accounts/me`.
+- `graph_kpis_service_manager_url` must be an HTTPS origin URL, and both it and `graph_kpis_export_endpoint` must use a host listed in `graph_kpis_allowed_hosts`.
+- Raw graph exports and raw audit JSON are written under `RUNNER_TEMP` and removed on exit. Only the sanitized payload JSON and KPI report are stored in `output_dir/graph-kpis/`.
 
-Without root `--config`, standard `worai` config discovery applies:
+Without root `--config`, standard `worai` config discovery applies from the action `working_directory`:
 
 - `WORAI_CONFIG`
-- `./worai.toml`
+- the nearest `worai.toml` in the working directory or its parents
 - `~/.config/worai/config.toml`
 - `~/.worai.toml`
 
@@ -109,6 +121,31 @@ jobs:
           log_level: info
 ```
 
+## Optional Graph KPI Upload
+
+Use this when a workflow should calculate graph KPIs after a successful sync and store them in service-manager.
+
+```yaml
+name: Sync graph and upload KPIs
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: wordlift/graph-sync@v6
+        with:
+          profile: production
+          config_path: ./worai.toml
+          graph_kpis_enabled: true
+        env:
+          WORDLIFT_API_KEY: ${{ secrets.WORDLIFT_API_KEY }}
+```
+
+The selected profile must expose `api_key`, either as a literal value or an environment interpolation such as `${WORDLIFT_API_KEY}`. The same key is used for `/accounts/me` and for the KPI `PUT` request.
+
 ## Optional Runner Setup
 
 - `actions/checkout` is required only if your config file is in the repo workspace.
@@ -176,4 +213,5 @@ Run tests locally:
 ./tests/install-worai.sh
 ./tests/install-playwright.sh
 ./tests/resolve-cache-key.sh
+./tests/run-graph-kpis.sh
 ```

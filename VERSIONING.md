@@ -18,6 +18,7 @@ This repository uses a lockstep-major versioning strategy with `worai`.
 
 - Action `v6` targets `worai` `6.x` by default.
 - Users can override `worai_version`, but versions outside the action's major line are best-effort and not guaranteed by this policy.
+- Optional wrapper features such as post-sync graph KPI upload are backward-compatible and may ship in a minor or patch release within the same action major.
 
 ## Consumer Guidance
 

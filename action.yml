@@ -57,6 +57,34 @@ inputs:
     description: "Available memory in GiB passed to the resource monitor."
     required: false
     default: "4"
+  graph_kpis_enabled:
+    description: "After a successful sync, export and audit the graph, then upload a graph KPI snapshot (true/false)."
+    required: false
+    default: "false"
+  graph_kpis_snapshot_date:
+    description: "Snapshot date for the graph KPI upload. Defaults to the current UTC date."
+    required: false
+    default: ""
+  graph_kpis_service_manager_url:
+    description: "Base URL for service-manager graph KPI APIs."
+    required: false
+    default: "https://api.wordlift.io"
+  graph_kpis_allowed_hosts:
+    description: "Comma-separated HTTPS host allowlist for graph KPI service-manager and export endpoints."
+    required: false
+    default: "api.wordlift.io"
+  graph_kpis_export_endpoint:
+    description: "Optional WordLift graph export endpoint override. Defaults to worai's graph export endpoint."
+    required: false
+    default: ""
+  graph_kpis_fail_on_error:
+    description: "Fail the action when graph KPI export, audit, or upload fails (true/false). Defaults to warning-only."
+    required: false
+    default: "false"
+  graph_kpis_retry_attempts:
+    description: "Maximum graph KPI upload attempts for transient HTTP failures."
+    required: false
+    default: "3"
 
 runs:
   using: "composite"
@@ -118,6 +146,24 @@ runs:
         INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
         INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
 
+    - name: Export, audit, and upload graph KPIs
+      if: ${{ success() }}
+      shell: bash
+      run: "$GITHUB_ACTION_PATH/scripts/run-graph-kpis.sh"
+      env:
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_CONFIG_PATH: ${{ inputs.config_path }}
+        INPUT_LOG_LEVEL: ${{ inputs.log_level }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
+        INPUT_GRAPH_KPIS_ENABLED: ${{ inputs.graph_kpis_enabled }}
+        INPUT_GRAPH_KPIS_SNAPSHOT_DATE: ${{ inputs.graph_kpis_snapshot_date }}
+        INPUT_GRAPH_KPIS_SERVICE_MANAGER_URL: ${{ inputs.graph_kpis_service_manager_url }}
+        INPUT_GRAPH_KPIS_ALLOWED_HOSTS: ${{ inputs.graph_kpis_allowed_hosts }}
+        INPUT_GRAPH_KPIS_EXPORT_ENDPOINT: ${{ inputs.graph_kpis_export_endpoint }}
+        INPUT_GRAPH_KPIS_FAIL_ON_ERROR: ${{ inputs.graph_kpis_fail_on_error }}
+        INPUT_GRAPH_KPIS_RETRY_ATTEMPTS: ${{ inputs.graph_kpis_retry_attempts }}
+
     - name: Collect resource monitor report
       if: always()
       shell: bash
@@ -143,6 +189,10 @@ runs:
         else
           echo "## Memory report — ${{ inputs.profile }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Monitor did not produce output." >> "$GITHUB_STEP_SUMMARY"
+        fi
+        graph_kpi_report="${{ steps.run_worai.outputs.output_dir }}/graph-kpis/graph_kpi_report.md"
+        if [ -f "$graph_kpi_report" ]; then
+          cat "$graph_kpi_report" >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Upload sync report
