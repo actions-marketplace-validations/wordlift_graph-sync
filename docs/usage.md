@@ -5,6 +5,7 @@
 - `worai --profile <name> graph sync run [--debug]`
 - `worai --config <path> --profile <name> graph sync run [--debug]`
 - The action sets `WORAI_LOG_LEVEL` to `warning` by default; supported values are `debug|info|warning|error`
+- When `graph_kpis_enabled: true`, a successful sync is followed by `worai graph export`, `worai graph audit --format json`, and a KPI snapshot upload to service-manager.
 
 ## Source Types
 
@@ -45,9 +46,24 @@ sheets_name = "URLs_US"
 When `config_path` is not provided, `worai` discovers config in this order:
 
 - `WORAI_CONFIG`
-- `./worai.toml`
+- the nearest `worai.toml` in the action `working_directory` or its parents
 - `~/.config/worai/config.toml`
 - `~/.worai.toml`
+
+## Graph KPI Upload
+
+- Disabled by default with `graph_kpis_enabled: false`.
+- Uses the selected profile `api_key` with `Authorization: Key ...`; no separate upload token is required.
+- Resolves the account id with `GET /accounts/me`.
+- Uploads the snapshot with idempotent `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
+- Defaults `graph_kpis_service_manager_url` to `https://api.wordlift.io`.
+- Requires `graph_kpis_service_manager_url` to be an HTTPS origin URL.
+- Requires service-manager and export endpoint hosts to be listed in `graph_kpis_allowed_hosts` and to use HTTPS.
+- Defaults `graph_kpis_snapshot_date` to the current UTC date; explicit values must use `YYYY-MM-DD`.
+- Stores raw graph export and raw audit JSON only under `RUNNER_TEMP` and removes them on exit.
+- Stores `graph_kpi_payload.json` and `graph_kpi_report.md` under `output_dir/graph-kpis/`.
+- By default, KPI failures emit a warning and do not fail a successful sync. Set `graph_kpis_fail_on_error: true` for strict behavior.
+- Requires Python TOML parsing support: `tomllib` on Python 3.11+, or `tomli`.
 
 ## Google Search Console Flag
 
