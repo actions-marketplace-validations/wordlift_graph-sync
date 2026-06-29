@@ -20,20 +20,24 @@ GitHub Action to install `worai`, install Python Playwright + Chromium, and run:
 | `debug`              | No       | `false`    | When truthy (`true/1/yes`), appends `--debug`.                                                                     |
 | `log_level`          | No       | `warning`  | Exports `WORAI_LOG_LEVEL` as `debug`, `info`, `warning`, or `error`.                                               |
 | `working_directory`  | No       | `.`        | Directory where `worai` runs.                                                                                      |
-| `worai_version`      | No       | `6.20.1`   | Exact `worai` version installed by the action.                                                                     |
+| `worai_version`      | No       | `6.20.4`   | Exact `worai` version installed by the action.                                                                     |
 | `install_playwright` | No       | `true`     | Installs Playwright Python package and browser binaries when truthy (`true/1/yes`).                                |
 | `playwright_version` | No       | `1.58.0`   | Exact Playwright Python package version installed when Playwright install is enabled.                              |
 | `playwright_browser` | No       | `chromium` | Browser passed to `python -m playwright install`.                                                                  |
 | `cache_enabled`      | No       | `true`     | Enables dependency cache for pip and Playwright browser binaries when truthy (`true/1/yes`).                       |
 | `output_dir`         | No       | `''`       | Directory for output artifacts (`graph_sync_report.md`, `graph_sync_failures.csv`). When set, the report is written and published to the job summary. Requires `worai>=6.19.0`; silently skipped on older versions. |
 | `cache_key_suffix`   | No       | `''`       | Optional cache key suffix. When empty, action derives `<worai_version>-<playwright_version>-<playwright_browser>`. |
-| `graph_kpis_enabled` | No       | `false`    | When truthy, export and audit the graph after a successful sync, then upload a graph KPI snapshot. |
+| `graph_kpis_enabled` | No       | `false`    | When truthy, export the graph after a successful sync, then calculate and upload a graph KPI snapshot. |
 | `graph_kpis_snapshot_date` | No | `''`       | Snapshot date for the KPI upload as `YYYY-MM-DD`. Defaults to the current UTC date. |
-| `graph_kpis_service_manager_url` | No | `https://api.wordlift.io` | HTTPS origin URL for service-manager graph KPI APIs. |
-| `graph_kpis_allowed_hosts` | No | `api.wordlift.io` | Comma-separated HTTPS host allowlist for graph KPI service-manager and export endpoints. |
+| `graph_kpis_api_url` | No | `https://api.wordlift.io` | HTTPS origin URL for WordLift graph KPI APIs. |
+| `graph_kpis_allowed_hosts` | No | `api.wordlift.io` | Comma-separated HTTPS host allowlist for graph KPI API and export endpoints. |
 | `graph_kpis_export_endpoint` | No | `''`       | Optional WordLift graph export endpoint override. Defaults to `worai graph export` behavior. |
-| `graph_kpis_fail_on_error` | No | `false`    | When truthy, fail the action if KPI export, audit, or upload fails. Default is warning-only. |
-| `graph_kpis_retry_attempts` | No | `3`        | Maximum upload attempts for transient graph KPI API failures. |
+| `graph_kpis_timeout_seconds` | No | `300` | Maximum seconds for KPI calculation/upload and WordLift API requests. |
+| `graph_kpis_shacl_workers` | No | `4` | Max worker threads for URL-level SHACL validation. |
+| `graph_kpis_shape` | No | `''` | Comma-separated extra SHACL shape files for KPI validation. |
+| `graph_kpis_no_builtin_shapes` | No | `false` | Use only shapes passed with `graph_kpis_shape` for KPI validation. |
+| `graph_kpis_fail_on_error` | No | `false`    | When truthy, fail the action if KPI export, calculation, or upload fails. Default is warning-only. |
+| `graph_kpis_retry_attempts` | No | `3`        | Deprecated; native `worai graph kpis push` handles upload behavior. |
 
 ## Behavior
 
@@ -43,10 +47,10 @@ GitHub Action to install `worai`, install Python Playwright + Chromium, and run:
   - `worai --profile <name> graph sync run [--debug]`
 - The action exports `WORAI_LOG_LEVEL=<value>` for the `worai` process. Default is `warning`.
 - The action always passes the root `--profile` option (the recommended form in current `worai` docs for `graph sync run`).
-- When `graph_kpis_enabled` is true and sync succeeds, the action runs `worai graph export`, then `worai graph audit --format json`, then uploads the sanitized KPI snapshot with `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
-- The KPI upload uses the selected `worai` profile `api_key` as `Authorization: Key ...`; no separate upload token is required. The action resolves the account id with `GET /accounts/me`.
-- `graph_kpis_service_manager_url` must be an HTTPS origin URL, and both it and `graph_kpis_export_endpoint` must use a host listed in `graph_kpis_allowed_hosts`.
-- Raw graph exports and raw audit JSON are written under `RUNNER_TEMP` and removed on exit. Only the sanitized payload JSON and KPI report are stored in `output_dir/graph-kpis/`.
+- When `graph_kpis_enabled` is true and sync succeeds, the action runs `worai graph export`, then `worai graph kpis push`.
+- `worai graph kpis push` uses the selected profile API key, resolves the account URL from the WordLift API, scopes website URL KPIs from that account URL, and uploads with `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
+- `graph_kpis_api_url` must be an HTTPS origin URL, and both it and `graph_kpis_export_endpoint` must use a host listed in `graph_kpis_allowed_hosts`.
+- Raw graph exports are written under `RUNNER_TEMP` and removed on exit. Only the KPI payload, detailed KPI JSON, and KPI report are stored in `output_dir/graph-kpis/`.
 
 Without root `--config`, standard `worai` config discovery applies from the action `working_directory`:
 
@@ -123,7 +127,7 @@ jobs:
 
 ## Optional Graph KPI Upload
 
-Use this when a workflow should calculate graph KPIs after a successful sync and store them in service-manager.
+Use this when a workflow should calculate graph KPIs after a successful sync and store them through the WordLift API.
 
 ```yaml
 name: Sync graph and upload KPIs
@@ -144,7 +148,7 @@ jobs:
           WORDLIFT_API_KEY: ${{ secrets.WORDLIFT_API_KEY }}
 ```
 
-The selected profile must expose `api_key`, either as a literal value or an environment interpolation such as `${WORDLIFT_API_KEY}`. The same key is used for `/accounts/me` and for the KPI `PUT` request.
+The selected profile must expose `api_key`, either as a literal value or an environment interpolation such as `${WORDLIFT_API_KEY}`. `worai` uses the same key to resolve the account URL and upload the KPI snapshot.
 
 ## Optional Runner Setup
 
@@ -202,7 +206,7 @@ export WORAI_PROFILE="acme_sitemap"
 ## Migration from `@v1`
 
 - Replace `uses: wordlift/graph-sync@v1` with `uses: wordlift/graph-sync@v6`.
-- Action `v6` defaults to installing `worai` `6.20.1`.
+- Action `v6` defaults to installing `worai` `6.20.4`.
 
 ## Development
 

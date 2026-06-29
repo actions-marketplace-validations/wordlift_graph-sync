@@ -5,7 +5,7 @@
 - `worai --profile <name> graph sync run [--debug]`
 - `worai --config <path> --profile <name> graph sync run [--debug]`
 - The action sets `WORAI_LOG_LEVEL` to `warning` by default; supported values are `debug|info|warning|error`
-- When `graph_kpis_enabled: true`, a successful sync is followed by `worai graph export`, `worai graph audit --format json`, and a KPI snapshot upload to service-manager.
+- When `graph_kpis_enabled: true`, a successful sync is followed by `worai graph export` and `worai graph kpis push`.
 
 ## Source Types
 
@@ -53,17 +53,17 @@ When `config_path` is not provided, `worai` discovers config in this order:
 ## Graph KPI Upload
 
 - Disabled by default with `graph_kpis_enabled: false`.
-- Uses the selected profile `api_key` with `Authorization: Key ...`; no separate upload token is required.
-- Resolves the account id with `GET /accounts/me`.
-- Uploads the snapshot with idempotent `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
-- Defaults `graph_kpis_service_manager_url` to `https://api.wordlift.io`.
-- Requires `graph_kpis_service_manager_url` to be an HTTPS origin URL.
-- Requires service-manager and export endpoint hosts to be listed in `graph_kpis_allowed_hosts` and to use HTTPS.
+- Uses the selected profile `api_key`; no separate upload token is required.
+- `worai` resolves the account id and account URL with `GET /accounts/me`.
+- `worai` scopes website URL KPIs from the account URL and uploads with idempotent `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
+- Defaults `graph_kpis_api_url` to `https://api.wordlift.io`.
+- Requires `graph_kpis_api_url` to be an HTTPS origin URL.
+- Requires WordLift API and export endpoint hosts to be listed in `graph_kpis_allowed_hosts` and to use HTTPS.
 - Defaults `graph_kpis_snapshot_date` to the current UTC date; explicit values must use `YYYY-MM-DD`.
-- Stores raw graph export and raw audit JSON only under `RUNNER_TEMP` and removes them on exit.
-- Stores `graph_kpi_payload.json` and `graph_kpi_report.md` under `output_dir/graph-kpis/`.
+- Stores raw graph export only under `RUNNER_TEMP` and removes it on exit.
+- Stores `graph_kpi_payload.json`, `graph_kpis.json`, and `graph_kpi_report.md` under `output_dir/graph-kpis/`.
 - By default, KPI failures emit a warning and do not fail a successful sync. Set `graph_kpis_fail_on_error: true` for strict behavior.
-- Requires Python TOML parsing support: `tomllib` on Python 3.11+, or `tomli`.
+- Fast scheduled KPI runs can set `graph_kpis_no_builtin_shapes: true` with `graph_kpis_shape` and `graph_kpis_shacl_workers`.
 
 ## Google Search Console Flag
 
@@ -85,7 +85,7 @@ When `config_path` is not provided, `worai` discovers config in this order:
 
 ## Installer Behavior
 
-- The action installs a pinned `worai` version via input `worai_version` (default `6.20.1`).
+- The action installs a pinned `worai` version via input `worai_version` (default `6.20.4`).
 - The action installs Playwright by default via:
   - Python package input `playwright_version` (default `1.58.0`)
   - Browser input `playwright_browser` (default `chromium`)

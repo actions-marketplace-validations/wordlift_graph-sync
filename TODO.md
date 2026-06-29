@@ -31,7 +31,7 @@
 - [x] Clarify `sheets_service_account` vs `oauth.service_account` naming compatibility in docs/specs for `worai` `6.9.4`.
 - [x] Switch docs/examples to use `oauth.service_account` naming for Google Sheets credentials.
 - [x] Add optional `log_level` input that maps to `WORAI_LOG_LEVEL` and sync tests/docs/specs.
-- [x] Add optional post-sync graph KPI export, audit, and service-manager upload.
+- [x] Add optional post-sync graph KPI export, calculation, and WordLift API upload.
 
 ## Future
 

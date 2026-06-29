@@ -28,7 +28,7 @@ inputs:
   worai_version:
     description: "Pinned worai version to install"
     required: false
-    default: "6.20.1"
+    default: "6.20.4"
   install_playwright:
     description: "Install Playwright Python package and browser binaries (true/false)"
     required: false
@@ -58,31 +58,47 @@ inputs:
     required: false
     default: "4"
   graph_kpis_enabled:
-    description: "After a successful sync, export and audit the graph, then upload a graph KPI snapshot (true/false)."
+    description: "After a successful sync, export the graph, calculate KPIs, and upload a graph KPI snapshot (true/false)."
     required: false
     default: "false"
   graph_kpis_snapshot_date:
     description: "Snapshot date for the graph KPI upload. Defaults to the current UTC date."
     required: false
     default: ""
-  graph_kpis_service_manager_url:
-    description: "Base URL for service-manager graph KPI APIs."
+  graph_kpis_api_url:
+    description: "Base URL for WordLift graph KPI APIs."
     required: false
     default: "https://api.wordlift.io"
   graph_kpis_allowed_hosts:
-    description: "Comma-separated HTTPS host allowlist for graph KPI service-manager and export endpoints."
+    description: "Comma-separated HTTPS host allowlist for graph KPI API and export endpoints."
     required: false
     default: "api.wordlift.io"
   graph_kpis_export_endpoint:
     description: "Optional WordLift graph export endpoint override. Defaults to worai's graph export endpoint."
     required: false
     default: ""
+  graph_kpis_timeout_seconds:
+    description: "Maximum seconds for graph KPI calculation/upload and WordLift API requests."
+    required: false
+    default: "300"
+  graph_kpis_shacl_workers:
+    description: "Max worker threads for URL-level SHACL validation."
+    required: false
+    default: "4"
+  graph_kpis_shape:
+    description: "Comma-separated extra SHACL shape files for graph KPI validation."
+    required: false
+    default: ""
+  graph_kpis_no_builtin_shapes:
+    description: "Use only shapes passed with graph_kpis_shape for graph KPI validation (true/false)."
+    required: false
+    default: "false"
   graph_kpis_fail_on_error:
-    description: "Fail the action when graph KPI export, audit, or upload fails (true/false). Defaults to warning-only."
+    description: "Fail the action when graph KPI export, calculation, or upload fails (true/false). Defaults to warning-only."
     required: false
     default: "false"
   graph_kpis_retry_attempts:
-    description: "Maximum graph KPI upload attempts for transient HTTP failures."
+    description: "Deprecated; native worai graph kpis push owns upload behavior."
     required: false
     default: "3"
 
@@ -146,7 +162,7 @@ runs:
         INPUT_WORKING_DIRECTORY: ${{ inputs.working_directory }}
         INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
 
-    - name: Export, audit, and upload graph KPIs
+    - name: Export, calculate, and upload graph KPIs
       if: ${{ success() }}
       shell: bash
       run: "$GITHUB_ACTION_PATH/scripts/run-graph-kpis.sh"
@@ -158,9 +174,13 @@ runs:
         INPUT_OUTPUT_DIR: ${{ inputs.output_dir }}
         INPUT_GRAPH_KPIS_ENABLED: ${{ inputs.graph_kpis_enabled }}
         INPUT_GRAPH_KPIS_SNAPSHOT_DATE: ${{ inputs.graph_kpis_snapshot_date }}
-        INPUT_GRAPH_KPIS_SERVICE_MANAGER_URL: ${{ inputs.graph_kpis_service_manager_url }}
+        INPUT_GRAPH_KPIS_API_URL: ${{ inputs.graph_kpis_api_url }}
         INPUT_GRAPH_KPIS_ALLOWED_HOSTS: ${{ inputs.graph_kpis_allowed_hosts }}
         INPUT_GRAPH_KPIS_EXPORT_ENDPOINT: ${{ inputs.graph_kpis_export_endpoint }}
+        INPUT_GRAPH_KPIS_TIMEOUT_SECONDS: ${{ inputs.graph_kpis_timeout_seconds }}
+        INPUT_GRAPH_KPIS_SHACL_WORKERS: ${{ inputs.graph_kpis_shacl_workers }}
+        INPUT_GRAPH_KPIS_SHAPE: ${{ inputs.graph_kpis_shape }}
+        INPUT_GRAPH_KPIS_NO_BUILTIN_SHAPES: ${{ inputs.graph_kpis_no_builtin_shapes }}
         INPUT_GRAPH_KPIS_FAIL_ON_ERROR: ${{ inputs.graph_kpis_fail_on_error }}
         INPUT_GRAPH_KPIS_RETRY_ATTEMPTS: ${{ inputs.graph_kpis_retry_attempts }}
 
