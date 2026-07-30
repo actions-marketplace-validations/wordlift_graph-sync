@@ -2,23 +2,27 @@
 
 ## Command Forms
 
-- `worai graph sync --profile <name> [--debug]`
-- `worai --config <path> graph sync --profile <name> [--debug]`
+- `worai --profile <name> graph sync run [--debug]`
+- `worai --config <path> --profile <name> graph sync run [--debug]`
+- The action sets `WORAI_LOG_LEVEL` to `warning` by default; supported values are `debug|info|warning|error`
+- When `graph_kpis_enabled: true`, a successful sync is followed by `worai graph export` and `worai graph kpis push`.
 
 ## Source Types
 
 - `urls`
 - `sitemap_url` (optional `sitemap_url_pattern`)
-- Google Sheets (`sheets_url`, `sheets_name`, `sheets_service_account`)
+- Google Sheets (`sheets_url`, `sheets_name`, `oauth.service_account`)
+- Configure exactly one source mode per run.
 
 ## Config Example (Acme)
 
 ```toml
 [profiles._base]
 sheets_url = "https://docs.google.com/spreadsheets/d/ACME_SPREADSHEET_ID"
-sheets_service_account = "${SHEETS_SERVICE_ACCOUNT}"
 concurrency = 8
 overwrite = true
+[profiles._base.oauth]
+service_account = "${SHEETS_SERVICE_ACCOUNT}"
 
 [profiles.de]
 api_key = "${WORDLIFT_API_KEY_DE}"
@@ -42,9 +46,24 @@ sheets_name = "URLs_US"
 When `config_path` is not provided, `worai` discovers config in this order:
 
 - `WORAI_CONFIG`
-- `./worai.toml`
+- the nearest `worai.toml` in the action `working_directory` or its parents
 - `~/.config/worai/config.toml`
 - `~/.worai.toml`
+
+## Graph KPI Upload
+
+- Disabled by default with `graph_kpis_enabled: false`.
+- Uses the selected profile `api_key`; no separate upload token is required.
+- `worai` resolves the account id and account URL with `GET /accounts/me`.
+- `worai` scopes website URL KPIs from the account URL and uploads with idempotent `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
+- Defaults `graph_kpis_api_url` to `https://api.wordlift.io`.
+- Requires `graph_kpis_api_url` to be an HTTPS origin URL.
+- Requires WordLift API and export endpoint hosts to be listed in `graph_kpis_allowed_hosts` and to use HTTPS.
+- Defaults `graph_kpis_snapshot_date` to the current UTC date; explicit values must use `YYYY-MM-DD`.
+- Stores raw graph export only under `RUNNER_TEMP` and removes it on exit.
+- Stores `graph_kpi_payload.json`, `graph_kpis.json`, and `graph_kpi_report.md` under `output_dir/graph-kpis/`.
+- By default, KPI failures emit a warning and do not fail a successful sync. Set `graph_kpis_fail_on_error: true` for strict behavior.
+- Fast scheduled KPI runs can set `graph_kpis_no_builtin_shapes: true` with `graph_kpis_shape` and `graph_kpis_shacl_workers`.
 
 ## Google Search Console Flag
 
@@ -53,10 +72,37 @@ When `config_path` is not provided, `worai` discovers config in this order:
 - Defaults to `false` when unset.
 - Mapped to SDK setting `GOOGLE_SEARCH_CONSOLE`.
 
+## Google Sheets Service Account
+
+- `oauth.service_account` accepts:
+  - inline JSON object content
+  - path to an existing credentials file
+- When using Google Sheets source (`sheets_url` + `sheets_name`), `oauth.service_account` is required.
+- `graph sync run` fails for Google Sheets source when:
+  - value is missing or empty
+  - value is neither valid JSON object content nor an existing file path
+  - value is valid JSON but not an object
+
 ## Installer Behavior
 
-- The action installs a pinned `worai` version via input `worai_version` (default `1.17.0`).
+- The action installs a pinned `worai` version via input `worai_version` (default `6.20.9`).
+- The action installs Playwright by default via:
+  - Python package input `playwright_version` (default `1.58.0`)
+  - Browser input `playwright_browser` (default `chromium`)
+- Set `install_playwright: false` to skip Playwright and browser installation.
 - Python interpreter resolution order is:
   - `python3`
   - `python`
 - The action fails if neither executable is available in `PATH`.
+
+## Cache Behavior
+
+- Caching is enabled by default via `cache_enabled` input.
+- Cached paths:
+  - `~/.cache/pip`
+  - `~/.cache/ms-playwright`
+- If `cache_key_suffix` is empty, the action builds it as:
+  - `<worai_version>-<playwright_version>-<playwright_browser>`
+- Effective cache key is:
+  - `<runner.os>-graph-sync-<cache_key_suffix>`
+- With cache enabled, self-hosted runners must use GitHub Actions Runner `2.327.1` or newer because the action uses `actions/cache` `v5.0.3`.

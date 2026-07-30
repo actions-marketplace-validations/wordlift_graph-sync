@@ -1,49 +1,91 @@
 # graph-sync GitHub Action
 
-GitHub Action to install `worai` and run:
+GitHub Action to install `worai`, install Python Playwright + Chromium, and run:
 
-- `worai graph sync --profile <name> [--debug]`
-- `worai --config <path> graph sync --profile <name> [--debug]`
+- `worai --profile <name> graph sync run [--debug]`
+- `worai --config <path> --profile <name> graph sync run [--debug]`
 
 ## Requirements
 
 - Python (`python3` or `python`) must be available on the runner.
+- Optional graph KPI upload needs Python with TOML parsing support (`tomllib` on Python 3.11+, or `tomli`).
 - `profile` is required and must exist in the selected `worai` config.
 
 ## Inputs
 
-| Input | Required | Default | Description |
-| --- | --- | --- | --- |
-| `profile` | Yes | - | Profile name passed to `--profile`. Must exist in selected config. |
-| `config_path` | No | `''` | If set, action runs `worai --config <path> ...`. |
-| `debug` | No | `false` | When truthy (`true/1/yes`), appends `--debug`. |
-| `working_directory` | No | `.` | Directory where `worai` runs. |
-| `worai_version` | No | `1.17.0` | Exact `worai` version installed by the action. |
+| Input                | Required | Default    | Description                                                                                                        |
+| -------------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| `profile`            | Yes      | -          | Profile name passed to `--profile`. Must exist in selected config.                                                 |
+| `config_path`        | No       | `''`       | If set, action runs `worai --config <path> ...`.                                                                   |
+| `debug`              | No       | `false`    | When truthy (`true/1/yes`), appends `--debug`.                                                                     |
+| `log_level`          | No       | `warning`  | Exports `WORAI_LOG_LEVEL` as `debug`, `info`, `warning`, or `error`.                                               |
+| `working_directory`  | No       | `.`        | Directory where `worai` runs.                                                                                      |
+| `worai_version`      | No       | `6.20.9`   | Exact `worai` version installed by the action.                                                                     |
+| `install_playwright` | No       | `true`     | Installs Playwright Python package and browser binaries when truthy (`true/1/yes`).                                |
+| `playwright_version` | No       | `1.58.0`   | Exact Playwright Python package version installed when Playwright install is enabled.                              |
+| `playwright_browser` | No       | `chromium` | Browser passed to `python -m playwright install`.                                                                  |
+| `cache_enabled`      | No       | `true`     | Enables dependency cache for pip and Playwright browser binaries when truthy (`true/1/yes`).                       |
+| `output_dir`         | No       | `''`       | Directory for output artifacts (`graph_sync_report.md`, `graph_sync_failures.csv`). When set, the report is written and published to the job summary. Requires `worai>=6.19.0`; silently skipped on older versions. |
+| `cache_key_suffix`   | No       | `''`       | Optional cache key suffix. When empty, action derives `<worai_version>-<playwright_version>-<playwright_browser>`. |
+| `graph_kpis_enabled` | No       | `false`    | When truthy, export the graph after a successful sync, then calculate and upload a graph KPI snapshot. |
+| `graph_kpis_snapshot_date` | No | `''`       | Snapshot date for the KPI upload as `YYYY-MM-DD`. Defaults to the current UTC date. |
+| `graph_kpis_api_url` | No | `https://api.wordlift.io` | HTTPS origin URL for WordLift graph KPI APIs. |
+| `graph_kpis_allowed_hosts` | No | `api.wordlift.io` | Comma-separated HTTPS host allowlist for graph KPI API and export endpoints. |
+| `graph_kpis_export_endpoint` | No | `''`       | Optional WordLift graph export endpoint override. Defaults to `worai graph export` behavior. |
+| `graph_kpis_timeout_seconds` | No | `300` | Maximum seconds for KPI calculation/upload and WordLift API requests. |
+| `graph_kpis_shacl_workers` | No | `4` | Max worker threads for URL-level SHACL validation. |
+| `graph_kpis_shape` | No | `''` | Comma-separated extra SHACL shape files for KPI validation. |
+| `graph_kpis_no_builtin_shapes` | No | `false` | Use only shapes passed with `graph_kpis_shape` for KPI validation. |
+| `graph_kpis_fail_on_error` | No | `false`    | When truthy, fail the action if KPI export, calculation, or upload fails. Default is warning-only. |
+| `graph_kpis_retry_attempts` | No | `3`        | Deprecated; native `worai graph kpis push` handles upload behavior. |
 
 ## Behavior
 
 - If `config_path` is set, command is:
-  - `worai --config <path> graph sync --profile <name> [--debug]`
+  - `worai --config <path> --profile <name> graph sync run [--debug]`
 - If `config_path` is not set, command is:
-  - `worai graph sync --profile <name> [--debug]`
+  - `worai --profile <name> graph sync run [--debug]`
+- The action exports `WORAI_LOG_LEVEL=<value>` for the `worai` process. Default is `warning`.
+- The action always passes the root `--profile` option (the recommended form in current `worai` docs for `graph sync run`).
+- When `graph_kpis_enabled` is true and sync succeeds, the action runs `worai graph export`, then `worai graph kpis push`.
+- `worai graph kpis push` uses the selected profile API key, resolves the account URL from the WordLift API, scopes website URL KPIs from that account URL, and uploads with `PUT /accounts/{account_id}/graph-kpis/{snapshot_date}`.
+- `graph_kpis_api_url` must be an HTTPS origin URL, and both it and `graph_kpis_export_endpoint` must use a host listed in `graph_kpis_allowed_hosts`.
+- Raw graph exports are written under `RUNNER_TEMP` and removed on exit. Only the KPI payload, detailed KPI JSON, and KPI report are stored in `output_dir/graph-kpis/`.
 
-Without root `--config`, standard `worai` config discovery applies:
+Without root `--config`, standard `worai` config discovery applies from the action `working_directory`:
 
 - `WORAI_CONFIG`
-- `./worai.toml`
+- the nearest `worai.toml` in the working directory or its parents
 - `~/.config/worai/config.toml`
 - `~/.worai.toml`
 
+For `graph sync run`, current `worai` profile resolution order is:
+
+- root `--profile`
+- `WORAI_PROFILE`
+- `default`
+
 ## Notes
 
-- Supported input sources are managed by `worai` config: `urls`, `sitemap_url` (+ optional `sitemap_url_pattern`), and Google Sheets (`sheets_url` + `sheets_name` + `sheets_service_account`).
-- `sheets_service_account` accepts inline JSON object content or a file path.
-- For Google Sheets source, `sheets_service_account` is required and the command fails when:
+- Supported input sources are managed by `worai` config: `urls`, `sitemap_url` (+ optional `sitemap_url_pattern`), and Google Sheets (`sheets_url` + `sheets_name` + `oauth.service_account`).
+- Configure exactly one input source mode per run.
+- `oauth.service_account` accepts inline JSON object content or a file path.
+- For Google Sheets source, `oauth.service_account` is required and the command fails when:
   - value is missing or empty
   - value is neither valid JSON object content nor an existing file path
   - value is valid JSON but not an object
 - `google_search_console` can be global or profile-level in `worai.toml`; profile value overrides global value; default is `false` when unset; maps to SDK setting `GOOGLE_SEARCH_CONSOLE`.
 - The command fails when selected profile does not define `api_key`.
+- By default, the action installs `playwright==1.58.0` and Chromium. Set `install_playwright: false` to skip this step.
+- By default, cache is enabled for `~/.cache/pip` and `~/.cache/ms-playwright`.
+- Default cache key format is `<runner.os>-graph-sync-<worai_version>-<playwright_version>-<playwright_browser>`.
+- Set `cache_enabled: false` to disable cache or set `cache_key_suffix` to control the key suffix directly.
+
+`worai` references:
+
+- Install & quickstart: <https://docs.wordlift.io/worai/install/>
+- Configuration: <https://docs.wordlift.io/worai/configuration/>
+- Graph command: <https://docs.wordlift.io/worai/commands/graph/>
 
 ## Minimal Usage
 
@@ -56,7 +98,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: wordlift/graph-sync@v1
+      - uses: wordlift/graph-sync@v6
         with:
           profile: production
 ```
@@ -74,54 +116,97 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: wordlift/graph-sync@v1
+      - uses: actions/checkout@v6
+      - uses: wordlift/graph-sync@v6
         with:
           profile: production
           config_path: ./worai.toml
           debug: false
+          log_level: info
 ```
+
+## Optional Graph KPI Upload
+
+Use this when a workflow should calculate graph KPIs after a successful sync and store them through the WordLift API.
+
+```yaml
+name: Sync graph and upload KPIs
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: wordlift/graph-sync@v6
+        with:
+          profile: production
+          config_path: ./worai.toml
+          graph_kpis_enabled: true
+        env:
+          WORDLIFT_API_KEY: ${{ secrets.WORDLIFT_API_KEY }}
+```
+
+The selected profile must expose `api_key`, either as a literal value or an environment interpolation such as `${WORDLIFT_API_KEY}`. `worai` uses the same key to resolve the account URL and upload the KPI snapshot.
 
 ## Optional Runner Setup
 
 - `actions/checkout` is required only if your config file is in the repo workspace.
 - `actions/setup-python` is optional on GitHub-hosted runners (Python is usually preinstalled), but recommended if you want a fixed Python version.
+- When cache is enabled, `actions/cache` `v5.0.3` requires GitHub Actions Runner `2.327.1` or newer on self-hosted runners.
+- GitHub-hosted Ubuntu runners typically satisfy Chromium runtime dependencies. On custom/self-hosted runners, install required OS packages before using Playwright.
 
 ## worai Config Examples
 
-Multi-market Google Sheets setup (anonymized as `acme`):
+The `graph sync run` workflow expects one source mode per profile.
+
+Sitemap source example:
 
 ```toml
-[profiles._base]
+[profiles.acme_sitemap]
+api_key = "${WORDLIFT_API_KEY}"
+sitemap_url = "https://example.com/sitemap.xml"
+ingest_source = "sitemap"
+ingest_loader = "web_scrape_api"
+ingest_passthrough_when_html = true
+web_page_import_timeout = "60s"
+```
+
+Google Sheets source example:
+
+```toml
+[profiles.acme_sheets]
+api_key = "${WORDLIFT_API_KEY}"
 sheets_url = "https://docs.google.com/spreadsheets/d/ACME_SPREADSHEET_ID"
-sheets_service_account = "${SHEETS_SERVICE_ACCOUNT}"
-concurrency = 8
-overwrite = true
+sheets_name = "URLs"
+ingest_source = "sheets"
+[profiles.acme_sheets.oauth]
+service_account = "${SHEETS_SERVICE_ACCOUNT}"
+```
 
-[profiles.de]
-api_key = "${WORDLIFT_API_KEY_DE}"
-sheets_name = "URLs_DE"
+Optional local default profile selection:
 
-[profiles.at]
-api_key = "${WORDLIFT_API_KEY_AT}"
-sheets_name = "URLs_AT"
-
-[profiles.ch]
-api_key = "${WORDLIFT_API_KEY_CH}"
-sheets_name = "URLs_CH"
-
-[profiles.us]
-api_key = "${WORDLIFT_API_KEY_US}"
-sheets_name = "URLs_US"
+```bash
+export WORAI_PROFILE="acme_sitemap"
 ```
 
 ## Release and Pinning
 
-- Publish immutable releases and move major tags (`v1`, `v2`) only by creating new immutable release tags.
+- Publish immutable releases and move alias tags only by creating new immutable release tags.
 - Consumers should pin this action to a full commit SHA for maximum integrity.
-- If using tags, prefer stable major tags (`@v1`) and keep them mapped to immutable release commits.
-- This repository includes automated release workflow `.github/workflows/release.yml` triggered by pushing tags like `v1.2.3`.
+- If using tags, use managed aliases:
+  - major alias (`@v6`) tracks latest `v6.x.y`
+- minor alias (`@v6.5`) tracks latest `v6.5.z`
+- The release workflow force-updates both alias tags on each release tag push.
+- This repository includes automated release workflow `.github/workflows/release.yml` triggered by pushing tags like `v6.0.0`.
 - Marketplace publication itself is still a manual GitHub UI step; the release workflow adds a summary with a direct release link and checklist.
+- Versioning strategy and compatibility policy are documented in `VERSIONING.md`.
+
+## Migration from `@v1`
+
+- Replace `uses: wordlift/graph-sync@v1` with `uses: wordlift/graph-sync@v6`.
+- Action `v6` defaults to installing `worai` `6.20.9`.
 
 ## Development
 
@@ -130,4 +215,7 @@ Run tests locally:
 ```bash
 ./tests/run-worai.sh
 ./tests/install-worai.sh
+./tests/install-playwright.sh
+./tests/resolve-cache-key.sh
+./tests/run-graph-kpis.sh
 ```

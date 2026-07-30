@@ -8,8 +8,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@v6
       - name: Run shell tests
         run: |
           ./tests/run-worai.sh
           ./tests/install-worai.sh
+          ./tests/install-playwright.sh
+          ./tests/resolve-cache-key.sh
+          ./tests/run-graph-kpis.sh
